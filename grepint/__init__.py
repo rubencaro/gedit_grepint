@@ -16,7 +16,6 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import gtk
 from gi.repository import GObject, Gedit, Gtk, Gio, Gdk
 import os, os.path
 from urllib import pathname2url
@@ -51,13 +50,14 @@ class GrepintPluginInstance:
     # MENU STUFF
     def _insert_menu( self ):
         manager = self._window.get_ui_manager()
-        self._action_group = Gtk.ActionGroup( "GrepintPluginActions" )
+        # replace keybindings from main window
+        self._action_group = Gtk.ActionGroup( "GeditWindowActions" )
         self._action_group.add_actions([
             ("GrepintFileAction", Gtk.STOCK_FIND, "Grep on file...",
              '<Ctrl>G', "Grep on file",
              lambda a: self.on_grepint_file_action()),
             ("GrepintProjectAction", Gtk.STOCK_FIND, "Grep on project...",
-             '<Ctrl><Alt>G', "Grep on project",
+             '<Ctrl><Shift>G', "Grep on project",
              lambda a: self.on_grepint_project_action()),
         ])
 
@@ -130,6 +130,7 @@ class GrepintPluginInstance:
 
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
+        print 'hey'
         oldtitle = self._grepint_window.get_title().replace(" * too many hits", "")
 
         if event.keyval == Gdk.KEY_Return:
@@ -138,11 +139,13 @@ class GrepintPluginInstance:
         pattern = self._glade_entry_name.get_text()
         pattern = pattern.replace(" ",".*")
         cmd = ""
+        print 'hey2 ' + pattern
         if self._show_hidden:
             filefilter = ""
         if len(pattern) > 0:
             # To search by name
-            cmd = "grep -i -m %d -e '%s' %s 2> /dev/null" % (max_result, pattern, self._tmpfile)
+            cmd = "grep -i -m %d -e '%s' '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
+            print 'hey3 ' + cmd
             self._grepint_window.set_title("Searching ... ")
         else:
             self._grepint_window.set_title("Enter pattern ... ")
@@ -150,6 +153,7 @@ class GrepintPluginInstance:
         self._liststore.clear()
         maxcount = 0
         hits = os.popen(cmd).readlines()
+        print 'hey4 ' + str(hits)
         for file in hits:
             file = file.rstrip().replace("./", "") #remove cwd prefix
             name = os.path.basename(file)
@@ -216,11 +220,25 @@ class GrepintPluginInstance:
             string += "'%s' " % d
         return string
 
+    def status( self,msg ):
+        statusbar = self._window.get_statusbar()
+        statusbar_ctxtid = statusbar.get_context_id('Grepint')
+        statusbar.push(statusbar_ctxtid,msg)
+
     #on menuitem activation (incl. shortcut)
     def on_grepint_file_action( self ):
         self._init_ui()
 
+        doc = self._window.get_active_document()
+        location = doc.get_location()
+        if location and doc.is_local():
+          self._current_file = location.get_uri().replace("file:///","")
+        else:
+          self.status("Cannot grep on remote or void files !")
+          return
+
         self._grepint_window.show()
+        # TODO: insert currently selected text
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
 
@@ -279,9 +297,9 @@ class GrepintPluginInstance:
             return root
 
 # STANDARD PLUMMING
-class grepintPlugin(GObject.Object, Gedit.WindowActivatable):
-    __gtype_name__ = "grepintPlugin"
-    DATA_TAG = "grepintPluginInstance"
+class GrepintPlugin(GObject.Object, Gedit.WindowActivatable):
+    __gtype_name__ = "GrepintPlugin"
+    DATA_TAG = "GrepintPluginInstance"
 
     window = GObject.property(type=Gedit.Window)
 
@@ -295,7 +313,7 @@ class grepintPlugin(GObject.Object, Gedit.WindowActivatable):
         self.window.set_data( self.DATA_TAG, instance )
 
     def do_activate( self ):
-        self._set_instance( grepintPluginInstance( self, self.window ) )
+        self._set_instance( GrepintPluginInstance( self, self.window ) )
 
     def do_deactivate( self ):
         self._get_instance().deactivate()
