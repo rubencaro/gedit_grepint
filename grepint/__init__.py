@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gi.repository import GObject, Gedit, Gtk, Gio, Gdk
+from gi.repository import GObject, Gedit, Gtk, Gio, Gdk, GLib
 import os, os.path
 from urllib import pathname2url
 import tempfile
@@ -35,6 +35,7 @@ class GrepintPluginInstance:
         self._liststore = None;
         self._init_ui()
         self._insert_menu()
+        self._single_file_grep = True
 
     def deactivate( self ):
         self._remove_menu()
@@ -108,15 +109,14 @@ class GrepintPluginInstance:
         self._hit_list.connect("select-cursor-row", self.on_select_from_list)
         self._hit_list.connect("button_press_event", self.on_list_mouse)
         self._liststore = Gtk.ListStore(str, str)
-        self._liststore.set_sort_column_id(0, Gtk.SortType.ASCENDING)
 
         self._hit_list.set_model(self._liststore)
-        column = Gtk.TreeViewColumn("Name" , Gtk.CellRendererText(), text=0)
-        column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        column2 = Gtk.TreeViewColumn("File", Gtk.CellRendererText(), text=1)
-        column2.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        self._hit_list.append_column(column)
-        self._hit_list.append_column(column2)
+        self._column1 = Gtk.TreeViewColumn("Name" , Gtk.CellRendererText(), text=0)
+        self._column1.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        self._column2 = Gtk.TreeViewColumn("File", Gtk.CellRendererText(), text=1)
+        self._column2.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        self._hit_list.append_column(self._column1)
+        self._hit_list.append_column(self._column2)
         self._hit_list.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
     #mouse event on list
@@ -130,7 +130,6 @@ class GrepintPluginInstance:
 
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
-        print 'hey'
         oldtitle = self._grepint_window.get_title().replace(" * too many hits", "")
 
         if event.keyval == Gdk.KEY_Return:
@@ -139,13 +138,12 @@ class GrepintPluginInstance:
         pattern = self._glade_entry_name.get_text()
         pattern = pattern.replace(" ",".*")
         cmd = ""
-        print 'hey2 ' + pattern
         if self._show_hidden:
             filefilter = ""
         if len(pattern) > 0:
+            # TODO: do grep on project
             # To search by name
-            cmd = "grep -i -m %d -e '%s' '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
-            print 'hey3 ' + cmd
+            cmd = "grep -inH -m %d -e '%s' '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
             self._grepint_window.set_title("Searching ... ")
         else:
             self._grepint_window.set_title("Enter pattern ... ")
@@ -153,11 +151,19 @@ class GrepintPluginInstance:
         self._liststore.clear()
         maxcount = 0
         hits = os.popen(cmd).readlines()
-        print 'hey4 ' + str(hits)
-        for file in hits:
-            file = file.rstrip().replace("./", "") #remove cwd prefix
-            name = os.path.basename(file)
-            self._liststore.append([name, file])
+        for hit in hits:
+            parts = hit.split(':')
+            path,line = parts[0:2]
+            text = ':'.join(parts[2:])[:160].replace("\n",'').strip()
+            name = os.path.basename(path)
+            # TODO: center text on hit using regex pattern
+            item = []
+            if self._single_file_grep:
+                item = [line, text]
+            else:
+                item = [name + ":" + line + ": " + text, path + ":" + line]
+            self._liststore.append(item)
+
             if maxcount > max_result:
                 break
             maxcount = maxcount + 1
@@ -227,23 +233,36 @@ class GrepintPluginInstance:
 
     #on menuitem activation (incl. shortcut)
     def on_grepint_file_action( self ):
+        self._single_file_grep = True
+        self.show_popup()
+
+    def on_grepint_project_action( self ):
+        self._single_file_grep = False
+        self.show_popup()
+
+    def show_popup( self ):
         self._init_ui()
 
         doc = self._window.get_active_document()
         location = doc.get_location()
         if location and doc.is_local():
-          self._current_file = location.get_uri().replace("file:///","")
+            self._current_file = location.get_uri().replace("file:///","")
         else:
-          self.status("Cannot grep on remote or void files !")
-          return
+            self.status("Cannot grep on remote or void files !")
+            return
+
+        if self._single_file_grep:
+            self._column1.set_title('Line')
+            self._column2.set_title('Text')
+        else:
+            self._column1.set_title('Match')
+            self._column2.set_title('File path')
 
         self._grepint_window.show()
         # TODO: insert currently selected text
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
 
-    def on_grepint_project_action( self ):
-        self.on_grepint_file_action()
 
     #on any keyboard event in main window
     def on_window_key( self, widget, event ):
@@ -251,7 +270,12 @@ class GrepintPluginInstance:
             self._grepint_window.hide()
 
     def foreach(self, model, path, iter, selected):
-        selected.append(model.get_value(iter, 1))
+        match = ''
+        if self._single_file_grep:
+            match = self._current_file + ':' + model.get_value(iter, 0)
+        else:
+            match = model.get_value(iter, 1)
+        selected.append(match)
 
     def _open_document(self, filename, line, column):
         """ open a the file specified by filename at the given line and column
@@ -260,10 +284,17 @@ class GrepintPluginInstance:
         if line == 0:
             raise ValueError, "line and column numbers start at 1"
 
-        location = Gio.File.new_for_uri(filename)
-        tab = self.window.get_tab_from_location(location)
+        location = Gio.File.new_for_uri("file:///" + filename)
+        print filename
+        print location.get_uri()
+        for doc in self._window.get_documents():
+            locat = doc.get_location()
+            if locat and doc.is_local():
+                print locat.get_uri()
+
+        tab = self._window.get_tab_from_location(location)
         if tab is None:
-            tab = self.window.create_tab_from_location(location, None,
+            tab = self._window.create_tab_from_location(location, None,
                                             line, column+1, False, True)
             view = tab.get_view()
         else:
@@ -271,12 +302,33 @@ class GrepintPluginInstance:
         GLib.idle_add(view.grab_focus)
         return tab
 
+    def _set_active_tab(self, tab, lineno, offset):
+        self._window.set_active_tab(tab)
+        view = tab.get_view()
+        if lineno > 0:
+            doc = tab.get_document()
+            doc.goto_line(lineno - 1)
+            cur_iter = doc.get_iter_at_line(lineno-1)
+            linelen = cur_iter.get_chars_in_line() - 1
+            if offset >= linelen:
+                cur_iter.forward_to_line_end()
+            elif offset > 0:
+                cur_iter.set_line_offset(offset)
+            elif offset == 0 and self.options.smart_home_end == 'before':
+                cur_iter.set_line_offset(0)
+                while cur_iter.get_char().isspace() and cur_iter.forward_char():
+                    pass
+            doc.place_cursor(cur_iter)
+            view.scroll_to_cursor()
+        return view
+
     #open file in selection and hide window
     def open_selected_item( self, event ):
-        selected = []
-        self._hit_list.get_selection().selected_foreach(self.foreach, selected)
-        for selected_file in    selected:
-            self._open_file ( selected_file )
+        items = []
+        self._hit_list.get_selection().selected_foreach(self.foreach, items)
+        for item in items:
+            path,line = item.split(':')
+            self._open_document( path,int(line),1 )
         self._grepint_window.hide()
 
     # FILEBROWSER integration

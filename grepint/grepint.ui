@@ -2,7 +2,7 @@
 <interface>
   <!-- interface-requires gtk+ 3.0 -->
   <object class="GtkWindow" id="GrepintWindow">
-    <property name="width_request">700</property>
+    <property name="width_request">900</property>
     <property name="height_request">400</property>
     <property name="can_focus">False</property>
     <property name="border_width">11</property>
