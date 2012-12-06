@@ -20,6 +20,7 @@ from gi.repository import GObject, Gedit, Gtk, Gio, Gdk, GLib
 import os, os.path
 from urllib import pathname2url
 import tempfile
+import time
 
 max_result = 50
 app_string = "Grepint"
@@ -30,6 +31,10 @@ class GrepintPluginInstance:
         self._window = window
         self._plugin = plugin
         self._dirs = [] # to be filled
+        glob_excludes = ['*.log','*~','*.swp']
+        dir_excludes = ['.git','.svn','log']
+        self._excludes = '--exclude=' + ' --exclude='.join(glob_excludes)
+        self._excludes += '--exclude-dir=' + ' --exclude-dir='.join(dir_excludes)
         self._tmpfile = os.path.join(tempfile.gettempdir(), 'grepint.%s.%s' % (os.getuid(),os.getpid()))
         self._show_hidden = False
         self._liststore = None;
@@ -102,7 +107,7 @@ class GrepintPluginInstance:
 
         #setup entry field
         self._glade_entry_name = self._builder.get_object( "entry_name" )
-        self._glade_entry_name.connect("key-release-event", self.on_pattern_entry)
+        self._glade_entry_name.connect("key-press-event", self.on_pattern_entry)
 
         #setup list field
         self._hit_list = self._builder.get_object( "hit_list" )
@@ -128,26 +133,40 @@ class GrepintPluginInstance:
     def on_select_from_list(self, widget, event):
         self.open_selected_item(event)
 
+    # updates GUI with 'searching' notices
+    def show_searching( self ):
+        self._liststore.append(["Searching...",""])
+        self._grepint_window.set_title("Searching ... ")
+
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
-        oldtitle = self._grepint_window.get_title().replace(" * too many hits", "")
-
-        if event.keyval == Gdk.KEY_Return:
-            self.open_selected_item( event )
+        # require press enter when searching on project
+        if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
             return
         pattern = self._glade_entry_name.get_text()
         pattern = pattern.replace(" ",".*")
         cmd = ""
         if self._show_hidden:
             filefilter = ""
-        if len(pattern) > 0:
-            # TODO: do grep on project
-            # To search by name
-            cmd = "grep -inH -m %d -e '%s' '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
-            self._grepint_window.set_title("Searching ... ")
-        else:
-            self._grepint_window.set_title("Enter pattern ... ")
 
+        self._liststore.clear()
+
+        if self._single_file_grep:
+            if len(pattern) > 0:
+                cmd = "grep -inH -m %d -e '%s' '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
+            else:
+                self._grepint_window.set_title("Enter pattern ... ")
+                return
+        else:
+            if len(pattern) > 3:
+                cmd = "grep -inHRI -D skip -m %d %s -e '%s' %s 2> /dev/null" % (max_result, self._excludes, pattern, self.get_dirs_string())
+            else:
+                self._grepint_window.set_title("Enter pattern (3 chars min)... ")
+                return
+        self.show_searching()
+        GLib.idle_add(self.do_search,cmd)
+
+    def do_search( self,cmd ):
         self._liststore.clear()
         maxcount = 0
         print cmd
@@ -169,8 +188,10 @@ class GrepintPluginInstance:
                 break
             maxcount = maxcount + 1
         if maxcount > max_result:
-            oldtitle = oldtitle + " * too many hits"
-        self._grepint_window.set_title(oldtitle)
+            new_title = "> %d hits" % max_result
+        else:
+            new_title = "%d hits" % maxcount
+        self._grepint_window.set_title(new_title)
 
         selected = []
         self._hit_list.get_selection().selected_foreach(self.foreach, selected)
@@ -179,6 +200,8 @@ class GrepintPluginInstance:
             iter = self._liststore.get_iter_first()
             if iter != None:
                 self._hit_list.get_selection().select_iter(iter)
+
+        return False
 
     def get_git_base_dir( self, path ):
         """ Get git base dir if given path is inside a git repo. None otherwise. """
@@ -257,6 +280,10 @@ class GrepintPluginInstance:
             self.status("Cannot grep on remote or void files !")
             return
 
+        # add every other path if on project mode
+        if not self._single_file_grep:
+            self.calculate_project_paths()
+
         if self._single_file_grep:
             self._column1.set_title('Line')
             self._column2.set_title('Text')
@@ -269,6 +296,31 @@ class GrepintPluginInstance:
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
 
+    def calculate_project_paths( self ):
+        # build paths list
+        self._dirs = []
+
+        # append current local open files dirs
+        for doc in self._window.get_documents():
+            location = doc.get_location()
+            if location and doc.is_local():
+                self._dirs.append( location.get_parent().get_uri() )
+
+        # append filebrowser root if available
+        fbroot = self.get_filebrowser_root()
+        if fbroot != "" and fbroot is not None:
+            self._dirs.append(fbroot)
+
+        # ensure_unique_entries is executed after mapping to git base dir
+        # but it's cheaper, then do it before too, avoiding extra work
+        self.ensure_unique_entries()
+
+        # replace each path with its git base dir if exists
+        self.map_to_git_base_dirs()
+
+        # append gedit dir (usually too wide for a quick search) if we have nothing so far
+        if len(self._dirs) == 0:
+            self._dirs = [ os.getcwd() ]
 
     #on any keyboard event in main window
     def on_window_key( self, widget, event ):
