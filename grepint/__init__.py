@@ -124,6 +124,8 @@ class GrepintPluginInstance:
         self._hit_list.append_column(self._column2)
         self._hit_list.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
+        self._label_info = self._builder.get_object( "label_info" )
+
     #mouse event on list
     def on_list_mouse( self, widget, event ):
         if event.type == gtk.gdk._2BUTTON_PRESS:
@@ -141,7 +143,7 @@ class GrepintPluginInstance:
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
         # require press enter when searching on project
-        if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
+        if (event != None) and (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
             return
         pattern = self._glade_entry_name.get_text()
         pattern = pattern.replace(" ",".*")
@@ -170,6 +172,7 @@ class GrepintPluginInstance:
         self._liststore.clear()
         maxcount = 0
         print cmd
+        self._label_info.set_text(cmd)
         hits = os.popen(cmd).readlines()
         for hit in hits:
             parts = hit.split(':')
@@ -285,14 +288,19 @@ class GrepintPluginInstance:
             self.calculate_project_paths()
 
         if self._single_file_grep:
+            self._grepint_window.set_size_request(600,400)
             self._column1.set_title('Line')
             self._column2.set_title('Text')
         else:
+            self._grepint_window.set_size_request(900,400)
             self._column1.set_title('Match')
             self._column2.set_title('File path')
 
         self._grepint_window.show()
-        # TODO: insert currently selected text
+        if doc.get_selection_bounds():
+            start, end = doc.get_selection_bounds()
+            self._glade_entry_name.set_text( doc.get_text(start, end, True) )
+	    self.on_pattern_entry(None,None)
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
 
