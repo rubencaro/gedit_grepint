@@ -150,6 +150,7 @@ class GrepintPluginInstance:
 
         self._liststore.clear()
         maxcount = 0
+        print cmd
         hits = os.popen(cmd).readlines()
         for hit in hits:
             parts = hit.split(':')
@@ -181,7 +182,12 @@ class GrepintPluginInstance:
 
     def get_git_base_dir( self, path ):
         """ Get git base dir if given path is inside a git repo. None otherwise. """
-        gitdir = os.popen("cd '%s'; git rev-parse --show-toplevel 2> /dev/null" % path).readlines()
+        try:
+            cmd = "cd '%s'; git rev-parse --show-toplevel 2> /dev/null" % path
+            print cmd
+            gitdir = os.popen(cmd).readlines()
+        except:
+            gitdir = ''
         if len(gitdir) > 0:
             return gitdir[0].replace("\n","")
         return None
@@ -246,7 +252,7 @@ class GrepintPluginInstance:
         doc = self._window.get_active_document()
         location = doc.get_location()
         if location and doc.is_local():
-            self._current_file = location.get_uri().replace("file:///","")
+            self._current_file = location.get_uri().replace("file://","").replace("//","/")
         else:
             self.status("Cannot grep on remote or void files !")
             return
@@ -285,13 +291,6 @@ class GrepintPluginInstance:
             raise ValueError, "line and column numbers start at 1"
 
         location = Gio.File.new_for_uri("file:///" + filename)
-        print filename
-        print location.get_uri()
-        for doc in self._window.get_documents():
-            locat = doc.get_location()
-            if locat and doc.is_local():
-                print locat.get_uri()
-
         tab = self._window.get_tab_from_location(location)
         if tab is None:
             tab = self._window.create_tab_from_location(location, None,
