@@ -228,9 +228,23 @@ class GrepintPluginInstance:
                 dirs.append(d)
             else:
                 dirs.append(gitdir)
-        self._dirs = dirs
+        self._dirs = set(dirs)
         # we could have introduced duplicates here
         self.ensure_unique_entries()
+
+    def add_rvm_gemset_dirs( self ):
+        """ Append every rvm gemset dir detected for current dir list """
+        gemsets = []
+        for d in self._dirs:
+            cmd = "/bin/bash -l -c 'source $HOME/.rvm/scripts/rvm &> /dev/null; cd '%s' &> /dev/null; gem env gemdir'" % d
+            print cmd
+            try:
+                gemset = os.popen(cmd).readlines()
+            except:
+                gemset = ''
+            if len(gemset) > 0:
+                gemsets.append( gemset[0].replace("\n","") )
+        self._dirs.update(gemsets)
 
     def ensure_unique_entries( self ):
         """ Remove duplicates from dirs list """
@@ -306,25 +320,28 @@ class GrepintPluginInstance:
 
     def calculate_project_paths( self ):
         # build paths list
-        self._dirs = []
+        self._dirs = set()
 
         # append current local open files dirs
         for doc in self._window.get_documents():
             location = doc.get_location()
             if location and doc.is_local():
-                self._dirs.append( location.get_parent().get_uri() )
+                self._dirs.add( location.get_parent().get_uri() )
 
         # append filebrowser root if available
         fbroot = self.get_filebrowser_root()
         if fbroot != "" and fbroot is not None:
-            self._dirs.append(fbroot)
+            self._dirs.add(fbroot)
 
         # ensure_unique_entries is executed after mapping to git base dir
         # but it's cheaper, then do it before too, avoiding extra work
         self.ensure_unique_entries()
 
         # replace each path with its git base dir if exists
-        self.map_to_git_base_dirs()
+        self.map_to_git_base_dirs() 
+
+        # add every rvm gemset associated with each git base dir we got
+        self.add_rvm_gemset_dirs()
 
         # append gedit dir (usually too wide for a quick search) if we have nothing so far
         if len(self._dirs) == 0:
