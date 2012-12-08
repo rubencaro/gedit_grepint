@@ -150,9 +150,15 @@ class GrepintPluginInstance:
 
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
-        # require press enter when searching on project
-        if (event != None) and (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
-            return
+        # quick keys mapping
+        if (event != None):
+            # move selection up/down
+            if event.keyval in [Gdk.KEY_Up,Gdk.KEY_Down]:
+                self._hit_list.grab_focus()
+                return
+            # require press enter when searching on project
+            if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
+                return
 
         # add every other path if on project mode
         if not self._single_file_grep:
