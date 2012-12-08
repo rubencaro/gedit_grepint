@@ -124,7 +124,15 @@ class GrepintPluginInstance:
         self._hit_list.append_column(self._column2)
         self._hit_list.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
+        # more widgets
         self._label_info = self._builder.get_object( "label_info" )
+        self._use_fb = self._builder.get_object("check_fb").get_active
+        self._action_fb = self._builder.get_object("action_fb")
+        self._use_git = self._builder.get_object("check_git").get_active
+        self._action_git = self._builder.get_object("action_git")
+        self._use_rvm = self._builder.get_object("check_rvm").get_active
+        self._action_rvm = self._builder.get_object("action_rvm")
+
 
     #mouse event on list
     def on_list_mouse( self, widget, event ):
@@ -145,6 +153,11 @@ class GrepintPluginInstance:
         # require press enter when searching on project
         if (event != None) and (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
             return
+
+        # add every other path if on project mode
+        if not self._single_file_grep:
+            self.calculate_project_paths()
+
         pattern = self._glade_entry_name.get_text()
         pattern = pattern.replace(" ",".*")
         cmd = ""
@@ -297,18 +310,20 @@ class GrepintPluginInstance:
             self.status("Cannot grep on remote or void files !")
             return
 
-        # add every other path if on project mode
-        if not self._single_file_grep:
-            self.calculate_project_paths()
-
         if self._single_file_grep:
             self._grepint_window.set_size_request(600,400)
             self._column1.set_title('Line')
             self._column2.set_title('Text')
+            self._action_fb.set_sensitive(False)
+            self._action_git.set_sensitive(False)
+            self._action_rvm.set_sensitive(False)
         else:
             self._grepint_window.set_size_request(900,400)
             self._column1.set_title('Match')
             self._column2.set_title('File path')
+            self._action_fb.set_sensitive(True)
+            self._action_git.set_sensitive(True)
+            self._action_rvm.set_sensitive(True)
 
         self._grepint_window.show()
         if doc.get_selection_bounds():
@@ -329,19 +344,22 @@ class GrepintPluginInstance:
                 self._dirs.add( location.get_parent().get_uri() )
 
         # append filebrowser root if available
-        fbroot = self.get_filebrowser_root()
-        if fbroot != "" and fbroot is not None:
-            self._dirs.add(fbroot)
+        if self._use_fb():
+          fbroot = self.get_filebrowser_root()
+          if fbroot != "" and fbroot is not None:
+              self._dirs.add(fbroot)
 
         # ensure_unique_entries is executed after mapping to git base dir
         # but it's cheaper, then do it before too, avoiding extra work
         self.ensure_unique_entries()
 
         # replace each path with its git base dir if exists
-        self.map_to_git_base_dirs() 
+        if self._use_git():
+            self.map_to_git_base_dirs()
 
-        # add every rvm gemset associated with each git base dir we got
-        self.add_rvm_gemset_dirs()
+        # add every rvm gemset associated with each dir we got
+        if self._use_rvm():
+            self.add_rvm_gemset_dirs()
 
         # append gedit dir (usually too wide for a quick search) if we have nothing so far
         if len(self._dirs) == 0:
