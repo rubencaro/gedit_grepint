@@ -53,11 +53,22 @@ class GrepintPluginInstance:
     def update_ui( self ):
         return
 
+    def spit(*obj):
+        print str(obj)
+
     # MENU STUFF
     def _insert_menu( self ):
         manager = self._window.get_ui_manager()
         # replace keybindings from main window
-        self._action_group = Gtk.ActionGroup( "GeditWindowActions" )
+        for ag in manager.get_action_groups():
+            if ag.get_name() == 'GeditWindowActions':
+                for ac in ag.list_actions():
+                    if ac.get_name() in ['SearchFindNext','SearchFindPrevious']:
+                        ac.disconnect_accelerator()
+                break
+
+#        self._action_group = Gtk.ActionGroup( "GeditWindowActions" )
+        self._action_group = Gtk.ActionGroup( "GrepintPluginActions" )
         self._action_group.add_actions([
             ("GrepintFileAction", Gtk.STOCK_FIND, "Grep on file...",
              '<Ctrl>G', "Grep on file",
