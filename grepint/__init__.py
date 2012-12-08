@@ -21,6 +21,7 @@ import os, os.path
 from urllib import pathname2url
 import tempfile
 import time
+import string
 
 max_result = 50
 app_string = "Grepint"
@@ -118,7 +119,7 @@ class GrepintPluginInstance:
 
         #setup entry field
         self._glade_entry_name = self._builder.get_object( "entry_name" )
-        self._glade_entry_name.connect("key-press-event", self.on_pattern_entry)
+        self._glade_entry_name.connect("key-release-event", self.on_pattern_entry)
 
         #setup list field
         self._hit_list = self._builder.get_object( "hit_list" )
@@ -161,6 +162,7 @@ class GrepintPluginInstance:
 
     #keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
+
         # quick keys mapping
         if (event != None):
             # move selection up/down
