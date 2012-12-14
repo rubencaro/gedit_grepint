@@ -325,8 +325,8 @@ class GrepintPluginInstance:
         location = doc.get_location()
         if location and doc.is_local():
             self._current_file = location.get_uri().replace("file://","").replace("//","/")
-        else:
-            self.status("Cannot grep on remote or void files !")
+        elif self._single_file_grep:
+            # cannot do void or remote files
             return
 
         if self._single_file_grep:
@@ -345,7 +345,7 @@ class GrepintPluginInstance:
             self._action_rvm.set_sensitive(True)
 
         self._grepint_window.show()
-        if doc.get_selection_bounds():
+        if doc and doc.get_selection_bounds():
             start, end = doc.get_selection_bounds()
             self._glade_entry_name.set_text( doc.get_text(start, end, True) )
 	    self.on_pattern_entry(None,None)
