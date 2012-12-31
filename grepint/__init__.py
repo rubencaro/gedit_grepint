@@ -35,7 +35,7 @@ class GrepintPluginInstance:
         glob_excludes = ['*.log','*~','*.swp']
         dir_excludes = ['.git','.svn','log']
         self._excludes = '--exclude=' + ' --exclude='.join(glob_excludes)
-        self._excludes += '--exclude-dir=' + ' --exclude-dir='.join(dir_excludes)
+        self._excludes += ' --exclude-dir=' + ' --exclude-dir='.join(dir_excludes)
         self._tmpfile = os.path.join(tempfile.gettempdir(), 'grepint.%s.%s' % (os.getuid(),os.getpid()))
         self._show_hidden = False
         self._liststore = None;
