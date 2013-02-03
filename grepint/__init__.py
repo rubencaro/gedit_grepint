@@ -29,6 +29,9 @@ app_string = "Grepint"
 def spit(*obj):
     print str(obj)
 
+def send_message(window, object_path, method, **kwargs):
+    return window.get_message_bus().send_sync(object_path, method, **kwargs)
+
 # essential interface
 class GrepintPluginInstance:
     def __init__( self, plugin, window ):
@@ -320,12 +323,13 @@ class GrepintPluginInstance:
         self._init_ui()
 
         doc = self._window.get_active_document()
-        location = doc.get_location()
-        if location and doc.is_local():
-            self._current_file = location.get_uri().replace("file://","").replace("//","/")
-        elif self._single_file_grep:
-            # cannot do void or remote files
-            return
+        if doc:
+          location = doc.get_location()
+          if location and doc.is_local():
+              self._current_file = location.get_uri().replace("file://","").replace("//","/")
+          elif self._single_file_grep:
+              # cannot do void or remote files
+              return
 
         if self._single_file_grep:
             self._grepint_window.set_size_request(600,400)
@@ -442,22 +446,11 @@ class GrepintPluginInstance:
             self._open_document( path,int(line),1 )
         self._grepint_window.hide()
 
-    # FILEBROWSER integration
+    # filebrowser integration
     def get_filebrowser_root(self):
-        base = u'org.gnome.gedit.plugins.filebrowser'
-
-        settings = Gio.Settings.new(base)
-        root = settings.get_string('virtual-root')
-
-        if root is not None:
-            filter_mode = settings.get_strv('filter-mode')
-
-            if 'hide-hidden' in filter_mode:
-                self._show_hidden = False
-            else:
-                self._show_hidden = True
-
-            return root
+        res = send_message(self._window, '/plugins/filebrowser', 'get_root')
+        if res.location is not None:
+            return res.location.get_path()
 
 # STANDARD PLUMMING
 class GrepintPlugin(GObject.Object, Gedit.WindowActivatable):
