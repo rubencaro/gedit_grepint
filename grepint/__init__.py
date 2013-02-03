@@ -23,8 +23,11 @@ import tempfile
 import time
 import string
 
-max_result = 50
+max_result = 100
 app_string = "Grepint"
+
+def spit(*obj):
+    print str(obj)
 
 # essential interface
 class GrepintPluginInstance:
@@ -36,7 +39,6 @@ class GrepintPluginInstance:
         dir_excludes = ['.git','.svn','log']
         self._excludes = '--exclude=' + ' --exclude='.join(glob_excludes)
         self._excludes += '--exclude-dir=' + ' --exclude-dir='.join(dir_excludes)
-        self._tmpfile = os.path.join(tempfile.gettempdir(), 'grepint.%s.%s' % (os.getuid(),os.getpid()))
         self._show_hidden = False
         self._liststore = None;
         self._init_ui()
@@ -49,13 +51,9 @@ class GrepintPluginInstance:
         self._window = None
         self._plugin = None
         self._liststore = None;
-        os.popen('rm %s &> /dev/null' % (self._tmpfile))
 
     def update_ui( self ):
         return
-
-    def spit(*obj):
-        print str(obj)
 
     # MENU STUFF
     def _insert_menu( self ):
@@ -348,7 +346,7 @@ class GrepintPluginInstance:
         if doc and doc.get_selection_bounds():
             start, end = doc.get_selection_bounds()
             self._glade_entry_name.set_text( doc.get_text(start, end, True) )
-	    self.on_pattern_entry(None,None)
+        self.on_pattern_entry(None,None)
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
 
