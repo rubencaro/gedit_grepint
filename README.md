@@ -42,4 +42,6 @@ then the search is performed on the gemset folder __also__.
 You can see the actual grep command performed, 
 in case you are brave enough to go for the real thing.
 
-Roughly based on https://github.com/rubencaro/gedit-snapopen-plugin
+Roughly based on, and perfect match with: 
+ - https://github.com/rubencaro/gedit-snapopen-plugin
+ - https://github.com/rubencaro/gedit_fastprojects
