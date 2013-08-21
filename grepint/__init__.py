@@ -475,7 +475,8 @@ class GrepintPlugin(GObject.Object, Gedit.WindowActivatable):
         self._set_instance( GrepintPluginInstance( self, self.window ) )
 
     def do_deactivate( self ):
-        self._get_instance().deactivate()
+        if self._get_instance():
+            self._get_instance().deactivate()
         self._set_instance( None )
 
     def do_update_ui( self ):
