@@ -115,6 +115,7 @@ class GrepintPluginInstance:
         self._grepint_window.set_transient_for(self._window)
 
         #setup buttons
+        self._builder.get_object( "search_button" ).connect( "clicked", lambda a: self.perform_search() )
         self._builder.get_object( "ok_button" ).connect( "clicked", self.open_selected_item )
         self._builder.get_object( "cancel_button" ).connect( "clicked", lambda a: self._grepint_window.hide())
 
@@ -161,9 +162,8 @@ class GrepintPluginInstance:
         self._liststore.append(["Searching...",""])
         self._grepint_window.set_title("Searching ... ")
 
-    #keyboard event on entry field
+    # keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
-
         # quick keys mapping
         if (event != None):
             # move selection up/down
@@ -173,7 +173,10 @@ class GrepintPluginInstance:
             # require press enter when searching on project
             if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
                 return
+        self.perform_search()
 
+    # get text from entry and launch search
+    def perform_search( self ):
         # add every other path if on project mode
         if not self._single_file_grep:
             self.calculate_project_paths()
@@ -193,7 +196,7 @@ class GrepintPluginInstance:
                 self._grepint_window.set_title("Enter pattern ... ")
                 return
         else:
-            if len(pattern) > 3:
+            if len(pattern) > 2:
                 cmd = "grep -inHRI -D skip -m %d %s -e \"%s\" %s 2> /dev/null" % (max_result, self._excludes, pattern, self.get_dirs_string())
             else:
                 self._grepint_window.set_title("Enter pattern (3 chars min)... ")
@@ -201,7 +204,7 @@ class GrepintPluginInstance:
         self.show_searching()
         GLib.idle_add(self.do_search,cmd)
 
-    def do_search( self,cmd ):
+    def do_search( self, cmd ):
         self._liststore.clear()
         maxcount = 0
         print cmd
@@ -463,10 +466,10 @@ class GrepintPlugin(GObject.Object, Gedit.WindowActivatable):
         GObject.Object.__init__(self)
 
     def _get_instance( self ):
-        return self.window.get_data( self.DATA_TAG )
+        return self.window.DATA_TAG
 
     def _set_instance( self, instance ):
-        self.window.set_data( self.DATA_TAG, instance )
+        self.window.DATA_TAG = instance
 
     def do_activate( self ):
         self._set_instance( GrepintPluginInstance( self, self.window ) )
