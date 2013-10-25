@@ -22,7 +22,7 @@ import tempfile
 import time
 import string
 
-max_result = 100
+max_result = 1000
 app_string = "Grepint"
 
 def spit(*obj):
