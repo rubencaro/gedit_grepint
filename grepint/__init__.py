@@ -18,7 +18,6 @@
 
 from gi.repository import GObject, Gedit, Gtk, Gio, Gdk, GLib
 import os, os.path
-from urllib import pathname2url
 import tempfile
 import time
 import string
@@ -27,7 +26,7 @@ max_result = 100
 app_string = "Grepint"
 
 def spit(*obj):
-    print str(obj)
+    print( str(obj) )
 
 def send_message(window, object_path, method, **kwargs):
     return window.get_message_bus().send_sync(object_path, method, **kwargs)
@@ -207,7 +206,7 @@ class GrepintPluginInstance:
     def do_search( self, cmd ):
         self._liststore.clear()
         maxcount = 0
-        print cmd
+        print(cmd)
         self._label_info.set_text(cmd)
         hits = os.popen(cmd).readlines()
         for hit in hits:
@@ -246,7 +245,7 @@ class GrepintPluginInstance:
         """ Get git base dir if given path is inside a git repo. None otherwise. """
         try:
             cmd = "cd '%s'; git rev-parse --show-toplevel 2> /dev/null" % path
-            print cmd
+            print(cmd)
             gitdir = os.popen(cmd).readlines()
         except:
             gitdir = ''
@@ -273,7 +272,7 @@ class GrepintPluginInstance:
         gemsets = []
         for d in self._dirs:
             cmd = "/bin/bash -l -c 'source $HOME/.rvm/scripts/rvm &> /dev/null; cd '%s' &> /dev/null; gem env gemdir'" % d
-            print cmd
+            print(cmd)
             try:
                 gemset = os.popen(cmd).readlines()
             except:
@@ -407,7 +406,7 @@ class GrepintPluginInstance:
         number. Line and column numbering starts at 1. """
 
         if line == 0:
-            raise ValueError, "line and column numbers start at 1"
+            raise ValueError("line and column numbers start at 1")
 
         location = Gio.File.new_for_uri("file:///" + filename)
         tab = self._window.get_tab_from_location(location)
