@@ -25,7 +25,7 @@ import string
 max_result = 1000
 app_string = "Grepint"
 
-def spit(*obj):
+def spit(obj):
     print( str(obj) )
 
 def send_message(window, object_path, method, **kwargs):
@@ -104,7 +104,7 @@ class GrepintPluginInstance:
 
     # UI DIALOGUES
     def _init_ui( self ):
-        filename = os.path.dirname( __file__ ) + "/grepint.ui"
+        filename = os.path.dirname( __file__ ) + "/dialog.ui"
         self._builder = Gtk.Builder()
         self._builder.add_from_file(filename)
 
@@ -115,11 +115,10 @@ class GrepintPluginInstance:
 
         #setup buttons
         self._builder.get_object( "search_button" ).connect( "clicked", lambda a: self.perform_search() )
-        self._builder.get_object( "ok_button" ).connect( "clicked", self.open_selected_item )
-        self._builder.get_object( "cancel_button" ).connect( "clicked", lambda a: self._grepint_window.hide())
+        self._builder.get_object( "open_button" ).connect( "clicked", self.open_selected_item )
 
         #setup entry field
-        self._glade_entry_name = self._builder.get_object( "entry_name" )
+        self._glade_entry_name = self._builder.get_object( "regex_entry" )
         self._glade_entry_name.connect("key-release-event", self.on_pattern_entry)
 
         #setup list field
@@ -145,7 +144,7 @@ class GrepintPluginInstance:
         self._action_git = self._builder.get_object("action_git")
         self._use_rvm = self._builder.get_object("check_rvm").get_active
         self._action_rvm = self._builder.get_object("action_rvm")
-
+        self._custom_folder = self._builder.get_object("custom_folder")
 
     #mouse event on list
     def on_list_mouse( self, widget, event ):
@@ -208,7 +207,7 @@ class GrepintPluginInstance:
         maxcount = 0
         print(cmd)
         self._label_info.set_text(cmd)
-        hits = os.popen(cmd).readlines()
+        hits = os.popen(cmd,encoding="utf-8").readlines()
         for hit in hits:
             parts = hit.split(':')
             path,line = parts[0:2]
@@ -340,6 +339,7 @@ class GrepintPluginInstance:
             self._action_fb.set_sensitive(False)
             self._action_git.set_sensitive(False)
             self._action_rvm.set_sensitive(False)
+            self._custom_folder.set_sensitive(False)
         else:
             self._grepint_window.set_size_request(900,400)
             self._column1.set_title('Match')
@@ -347,6 +347,7 @@ class GrepintPluginInstance:
             self._action_fb.set_sensitive(True)
             self._action_git.set_sensitive(True)
             self._action_rvm.set_sensitive(True)
+            self._custom_folder.set_sensitive(True)
 
         self._grepint_window.show()
         if doc and doc.get_selection_bounds():
@@ -383,6 +384,12 @@ class GrepintPluginInstance:
         # add every rvm gemset associated with each dir we got
         if self._use_rvm():
             self.add_rvm_gemset_dirs()
+
+        # add custom folder if given
+        custom_folder = self._custom_folder.get_filename()
+        spit(custom_folder)
+        if custom_folder is not None:
+            self._dirs.add( custom_folder )
 
         # append gedit dir (usually too wide for a quick search) if we have nothing so far
         if len(self._dirs) == 0:
