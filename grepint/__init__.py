@@ -21,6 +21,7 @@ import os, os.path
 import tempfile
 import time
 import string
+from subprocess import Popen, PIPE, STDOUT
 
 max_result = 1000
 app_string = "Grepint"
@@ -207,7 +208,7 @@ class GrepintPluginInstance:
         maxcount = 0
         print(cmd)
         self._label_info.set_text(cmd)
-        hits = os.popen(cmd,encoding="utf-8").readlines()
+        hits = self.run(cmd)
         for hit in hits:
             parts = hit.split(':')
             path,line = parts[0:2]
@@ -245,7 +246,7 @@ class GrepintPluginInstance:
         try:
             cmd = "cd '%s'; git rev-parse --show-toplevel 2> /dev/null" % path
             print(cmd)
-            gitdir = os.popen(cmd).readlines()
+            gitdir = self.run(cmd)
         except:
             gitdir = ''
         if len(gitdir) > 0:
@@ -273,7 +274,7 @@ class GrepintPluginInstance:
             cmd = "/bin/bash -l -c 'source $HOME/.rvm/scripts/rvm &> /dev/null; cd '%s' &> /dev/null; gem env gemdir'" % d
             print(cmd)
             try:
-                gemset = os.popen(cmd).readlines()
+                gemset = self.run(cmd)
             except:
                 gemset = ''
             if len(gemset) > 0:
@@ -305,6 +306,17 @@ class GrepintPluginInstance:
         for d in self._dirs:
             string += "'%s' " % d
         return string
+
+    def run(self, cmd):
+        """ Gets the output lines of the given cmd filtering lines with encoding problems """
+        p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+        cs = []
+        for s in p.stdout.readlines():
+          try:
+              cs.append( str(s, encoding='utf-8') )
+          except:
+              pass
+        return cs
 
     def status( self,msg ):
         statusbar = self._window.get_statusbar()
