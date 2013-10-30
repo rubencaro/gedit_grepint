@@ -190,13 +190,13 @@ class GrepintPluginInstance:
 
         if self._single_file_grep:
             if len(pattern) > 0:
-                cmd = "grep -inH -m %d -e \"%s\" '%s' 2> /dev/null" % (max_result, pattern, self._current_file)
+                cmd = "grep -inH -e \"%s\" '%s' | head -n%d 2> /dev/null" % (pattern, self._current_file, max_result)
             else:
                 self._grepint_window.set_title("Enter pattern ... ")
                 return
         else:
             if len(pattern) > 2:
-                cmd = "grep -inHRI -D skip -m %d %s -e \"%s\" %s 2> /dev/null" % (max_result, self._excludes, pattern, self.get_dirs_string())
+                cmd = "grep -inHRI -D skip %s -e \"%s\" %s | head -n%d 2> /dev/null" % (self._excludes, pattern, self.get_dirs_string(), max_result)
             else:
                 self._grepint_window.set_title("Enter pattern (3 chars min)... ")
                 return
