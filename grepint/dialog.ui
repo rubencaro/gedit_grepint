@@ -252,6 +252,7 @@ Remember that some symbols may need escaping.</property>
                 <property name="is_focus">True</property>
                 <property name="can_default">True</property>
                 <property name="headers_clickable">False</property>
+                <property name="tooltip_column">1</property>
               </object>
             </child>
           </object>
