@@ -428,7 +428,7 @@ class GrepintPluginInstance:
         if line == 0:
             raise ValueError("line and column numbers start at 1")
 
-        location = Gio.File.new_for_uri("file:///" + filename)
+        location = Gio.File.new_for_uri("file://" + filename)
         tab = self._window.get_tab_from_location(location)
         if tab is None:
             tab = self._window.create_tab_from_location(location, None,
