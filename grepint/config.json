@@ -1,0 +1,8 @@
+{
+  "help": [
+            "Edit this file to change Grepint Plugin configuration.",
+            "New configuration will be applied by saving this file, ",
+            "or by clicking 'Reload Configuration'."
+          ],
+  "max_results": 1000
+}

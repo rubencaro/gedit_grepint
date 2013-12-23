@@ -17,13 +17,13 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gi.repository import GObject, Gedit, Gtk, Gio, Gdk, GLib
-import os, os.path
+import os, os.path, inspect, sys
 import tempfile
 import time
 import string
 from subprocess import Popen, PIPE, STDOUT
+import json
 
-max_result = 1000
 app_string = "Grepint"
 
 def spit(obj):
@@ -48,6 +48,10 @@ class GrepintPluginInstance:
         self._insert_menu()
         self._single_file_grep = True
 
+        self.config_file = self.get_config_file_path()
+        self.config = {}
+        self.reload_config()
+
     def deactivate( self ):
         self._remove_menu()
         self._action_group = None
@@ -57,6 +61,9 @@ class GrepintPluginInstance:
 
     def update_ui( self ):
         return
+
+    def get_config_file_path(self):
+        return os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/config.json'
 
     # MENU STUFF
     def _insert_menu( self ):
@@ -71,14 +78,17 @@ class GrepintPluginInstance:
 
 #        self._action_group = Gtk.ActionGroup( "GeditWindowActions" )
         self._action_group = Gtk.ActionGroup( "GrepintPluginActions" )
-        self._action_group.add_actions([
-            ("GrepintFileAction", Gtk.STOCK_FIND, "Grep on file...",
-             '<Ctrl>G', "Grep on file",
-             lambda a: self.on_grepint_file_action()),
-            ("GrepintProjectAction", Gtk.STOCK_FIND, "Grep on project...",
-             '<Ctrl><Shift>G', "Grep on project",
-             lambda a: self.on_grepint_project_action()),
-        ])
+        self._action_group.add_actions([("GrepintMenu", None, 'Grepint')] + \
+            [
+                ("GrepintFileAction", Gtk.STOCK_FIND, "Grep on file...",
+                  '<Ctrl>G', "Grep on file", self.on_grepint_file_action),
+                ("GrepintProjectAction", Gtk.STOCK_FIND, "Grep on project...",
+                  '<Ctrl><Shift>G', "Grep on project", self.on_grepint_project_action),
+                ("GrepintConfigure", None, "Edit configuration file",
+                  None, None, self.click_grepint_configure),
+                ("GrepintReload", None, "Reload configuration file",
+                  None, None, self.click_grepint_reload)
+            ])
 
         manager.insert_action_group(self._action_group)
 
@@ -87,8 +97,14 @@ class GrepintPluginInstance:
             <menubar name="MenuBar">
               <menu name="SearchMenu" action="Search">
                 <placeholder name="SearchOps_7">
-                  <menuitem name="GrepintF" action="GrepintFileAction"/>
-                  <menuitem name="GrepintP" action="GrepintProjectAction"/>
+                  <menu name="GrepintMenu" action="GrepintMenu">
+                    <placeholder name="GrepintMenuHolder">
+                      <menuitem name="GrepintF" action="GrepintFileAction"/>
+                      <menuitem name="GrepintP" action="GrepintProjectAction"/>
+                      <menuitem name="GrepintConfigure" action="GrepintConfigure"/>
+                      <menuitem name="GrepintReload" action="GrepintReload"/>
+                    </placeholder>
+                  </menu>
                 </placeholder>
               </menu>
             </menubar>
@@ -161,6 +177,34 @@ class GrepintPluginInstance:
         self._liststore.append(["Searching...",""])
         self._grepint_window.set_title("Searching ... ")
 
+    def click_grepint_configure(self, action, data = None):
+      # open config.json file
+        location = Gio.File.new_for_uri("file://" + self.config_file)
+        tab = self._window.get_tab_from_location(location)
+        if tab is None:
+            tab = self._window.create_tab_from_location(location, None,
+                                            1, 1, False, True)
+            view = tab.get_view()
+            doc = self._window.get_active_document()
+            doc.connect('saved', self.on_saved_config_file)
+        else:
+            view = self._window._set_active_tab(tab, 1, 1)
+        GLib.idle_add(view.grab_focus)
+
+    def on_saved_config_file(self, *args):
+        self.reload_config()
+
+    def click_grepint_reload(self, action, data = None):
+        self.reload_config()
+
+    def reload_config(self):
+        self.config = { 'max_results': 1000 }
+        try:
+            self.config = json.load( open( self.config_file ) )
+        except:
+            print( 'click_regex: Could not load config file from ' + str(self.config_file) )
+            print( str(sys.exc_info()) )
+
     # keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
         # quick keys mapping
@@ -190,13 +234,13 @@ class GrepintPluginInstance:
 
         if self._single_file_grep:
             if len(pattern) > 0:
-                cmd = "grep -inH -e \"%s\" '%s' | head -n%d 2> /dev/null" % (pattern, self._current_file, max_result)
+                cmd = "grep -inH -e \"%s\" '%s' | head -n%d 2> /dev/null" % (pattern, self._current_file, self.config['max_results'])
             else:
                 self._grepint_window.set_title("Enter pattern ... ")
                 return
         else:
             if len(pattern) > 2:
-                cmd = "grep -inHRI -D skip %s -e \"%s\" %s | head -n%d 2> /dev/null" % (self._excludes, pattern, self.get_dirs_string(), max_result)
+                cmd = "grep -inHRI -D skip %s -e \"%s\" %s | head -n%d 2> /dev/null" % (self._excludes, pattern, self.get_dirs_string(), self.config['max_results'])
             else:
                 self._grepint_window.set_title("Enter pattern (3 chars min)... ")
                 return
@@ -222,11 +266,11 @@ class GrepintPluginInstance:
                 item = [name + ":" + line + ": " + text, path + ":" + line]
             self._liststore.append(item)
 
-            if maxcount > max_result:
+            if maxcount > self.config['max_results']:
                 break
             maxcount = maxcount + 1
-        if maxcount > max_result:
-            new_title = "> %d hits" % max_result
+        if maxcount > self.config['max_results']:
+            new_title = "> %d hits" % self.config['max_results']
         else:
             new_title = "%d hits" % maxcount
         self._grepint_window.set_title(new_title)
@@ -325,11 +369,11 @@ class GrepintPluginInstance:
         statusbar.push(statusbar_ctxtid,msg)
 
     #on menuitem activation (incl. shortcut)
-    def on_grepint_file_action( self ):
+    def on_grepint_file_action( self, *args ):
         self._single_file_grep = True
         self.show_popup()
 
-    def on_grepint_project_action( self ):
+    def on_grepint_project_action( self, *args ):
         self._single_file_grep = False
         self.show_popup()
 
