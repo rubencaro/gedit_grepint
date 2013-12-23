@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.0 on Sat Dec  7 09:07:57 2013 -->
+<!-- Generated with glade 3.16.0 on Mon Dec 23 17:52:14 2013 -->
 <interface>
   <!-- interface-requires gtk+ 3.0 -->
   <object class="GtkAction" id="action_fb">
     <property name="label" translatable="yes">File browser root</property>
   </object>
+  <object class="GtkAction" id="action_gems">
+    <property name="label" translatable="yes">Gem paths</property>
+  </object>
   <object class="GtkAction" id="action_git">
     <property name="label" translatable="yes">GIT paths</property>
-  </object>
-  <object class="GtkAction" id="action_rvm">
-    <property name="label" translatable="yes">RVM gemset paths</property>
   </object>
   <object class="GtkWindow" id="GrepintWindow">
     <property name="width_request">900</property>
@@ -133,8 +133,8 @@ Remember that some symbols may need escaping.</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkCheckButton" id="check_rvm">
-                        <property name="related_action">action_rvm</property>
+                      <object class="GtkCheckButton" id="check_gems">
+                        <property name="related_action">action_gems</property>
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="receives_default">False</property>

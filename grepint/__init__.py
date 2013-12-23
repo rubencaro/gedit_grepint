@@ -143,8 +143,8 @@ class GrepintPluginInstance:
         self._action_fb = self._builder.get_object("action_fb")
         self._use_git = self._builder.get_object("check_git").get_active
         self._action_git = self._builder.get_object("action_git")
-        self._use_rvm = self._builder.get_object("check_rvm").get_active
-        self._action_rvm = self._builder.get_object("action_rvm")
+        self._use_gems = self._builder.get_object("check_gems").get_active
+        self._action_gems = self._builder.get_object("action_gems")
         self._custom_folder = self._builder.get_object("custom_folder")
 
     #mouse event on list
@@ -267,19 +267,20 @@ class GrepintPluginInstance:
         # we could have introduced duplicates here
         self.ensure_unique_entries()
 
-    def add_rvm_gemset_dirs( self ):
-        """ Append every rvm gemset dir detected for current dir list """
-        gemsets = []
+    def add_gem_dirs( self ):
+        """ Append every gem dir detected for current dir list """
+        gempaths = []
         for d in self._dirs:
+            # still compatible with RVM
             cmd = "/bin/bash -l -c 'source $HOME/.rvm/scripts/rvm &> /dev/null; cd '%s' &> /dev/null; gem env gemdir'" % d
             print(cmd)
             try:
-                gemset = self.run(cmd)
+                gempath = self.run(cmd)
             except:
-                gemset = ''
-            if len(gemset) > 0:
-                gemsets.append( gemset[0].replace("\n","") )
-        self._dirs.update(gemsets)
+                gempath = ''
+            if len(gempath) > 0:
+                gempaths.append( gempath[0].replace("\n","") )
+        self._dirs.update(gempaths)
 
     def ensure_unique_entries( self ):
         """ Remove duplicates from dirs list """
@@ -350,7 +351,7 @@ class GrepintPluginInstance:
             self._column2.set_title('Text')
             self._action_fb.set_sensitive(False)
             self._action_git.set_sensitive(False)
-            self._action_rvm.set_sensitive(False)
+            self._action_gems.set_sensitive(False)
             self._custom_folder.set_sensitive(False)
         else:
             self._grepint_window.set_size_request(900,400)
@@ -358,7 +359,7 @@ class GrepintPluginInstance:
             self._column2.set_title('File path')
             self._action_fb.set_sensitive(True)
             self._action_git.set_sensitive(True)
-            self._action_rvm.set_sensitive(True)
+            self._action_gems.set_sensitive(True)
             self._custom_folder.set_sensitive(True)
 
         self._grepint_window.show()
@@ -393,9 +394,9 @@ class GrepintPluginInstance:
         if self._use_git():
             self.map_to_git_base_dirs()
 
-        # add every rvm gemset associated with each dir we got
-        if self._use_rvm():
-            self.add_rvm_gemset_dirs()
+        # add every gem path associated with each dir we got
+        if self._use_gems():
+            self.add_gem_dirs()
 
         # add custom folder if given
         custom_folder = self._custom_folder.get_filename()
