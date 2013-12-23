@@ -162,6 +162,10 @@ class GrepintPluginInstance:
         self._use_gems = self._builder.get_object("check_gems").get_active
         self._action_gems = self._builder.get_object("action_gems")
         self._custom_folder = self._builder.get_object("custom_folder")
+        self._use_case = self._builder.get_object("check_case").get_active
+        self._use_word = self._builder.get_object("check_word").get_active
+        self._use_line = self._builder.get_object("check_line").get_active
+        self._use_inverse = self._builder.get_object("check_inverse").get_active
 
     #mouse event on list
     def on_list_mouse( self, widget, event ):
@@ -232,15 +236,27 @@ class GrepintPluginInstance:
 
         self._liststore.clear()
 
+        # man grep
+        opts = "nH"
+        if not self._use_case():
+          opts += 'i'
+        if self._use_word():
+          opts += 'w'
+        if self._use_line():
+          opts += 'x'
+        if self._use_inverse():
+          opts += 'v'
+
         if self._single_file_grep:
             if len(pattern) > 0:
-                cmd = "grep -inH -e \"%s\" '%s' | head -n%d 2> /dev/null" % (pattern, self._current_file, self.config['max_results'])
+                cmd = "grep -%s -e \"%s\" '%s' | head -n%d 2> /dev/null" % (opts, pattern, self._current_file, self.config['max_results'])
             else:
                 self._grepint_window.set_title("Enter pattern ... ")
                 return
         else:
             if len(pattern) > 2:
-                cmd = "grep -inHRI -D skip %s -e \"%s\" %s | head -n%d 2> /dev/null" % (self._excludes, pattern, self.get_dirs_string(), self.config['max_results'])
+                opts += 'RI'
+                cmd = "grep -%s -D skip %s -e \"%s\" %s | head -n%d 2> /dev/null" % (opts, self._excludes, pattern, self.get_dirs_string(), self.config['max_results'])
             else:
                 self._grepint_window.set_title("Enter pattern (3 chars min)... ")
                 return
