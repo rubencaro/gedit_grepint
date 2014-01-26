@@ -27,7 +27,7 @@ import json
 app_string = "Grepint"
 
 def spit(obj):
-    print( str(obj) )
+    print( '\n\n' + str(obj) + '\n\n' )
 
 def send_message(window, object_path, method, **kwargs):
     return window.get_message_bus().send_sync(object_path, method, **kwargs)
@@ -51,6 +51,9 @@ class GrepintPluginInstance:
         self.config_file = self.get_config_file_path()
         self.config = {}
         self.reload_config()
+
+        self.last_search = ''
+        self.last_results = []
 
     def deactivate( self ):
         self._remove_menu()
@@ -212,7 +215,8 @@ class GrepintPluginInstance:
     # keyboard event on entry field
     def on_pattern_entry( self, widget, event ):
         # quick keys mapping
-        if (event != None):
+        if (event != None and event.keyval):
+#            key = Gdk.keyval_name(event.keyval)
             # move selection up/down
             if event.keyval in [Gdk.KEY_Up,Gdk.KEY_Down]:
                 self._hit_list.grab_focus()
@@ -220,7 +224,11 @@ class GrepintPluginInstance:
             # require press enter when searching on project
             if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
                 return
-        self.perform_search()
+            # do not repeat the same search
+            if self.last_search == self._glade_entry_name.get_text():
+                self.restore_last()
+                return
+            self.perform_search()
 
     # get text from entry and launch search
     def perform_search( self ):
@@ -265,8 +273,8 @@ class GrepintPluginInstance:
 
     def do_search( self, cmd ):
         self._liststore.clear()
+        self.last_results.clear()
         maxcount = 0
-        print(cmd)
         self._label_info.set_text(cmd)
         hits = self.run(cmd)
         for hit in hits:
@@ -281,6 +289,7 @@ class GrepintPluginInstance:
             else:
                 item = [name + ":" + line + ": " + text, path + ":" + line]
             self._liststore.append(item)
+            self.last_results.append(item)
 
             if maxcount > self.config['max_results']:
                 break
@@ -299,13 +308,14 @@ class GrepintPluginInstance:
             if iter != None:
                 self._hit_list.get_selection().select_iter(iter)
 
+        self.last_search = self._glade_entry_name.get_text()
+
         return False
 
     def get_git_base_dir( self, path ):
         """ Get git base dir if given path is inside a git repo. None otherwise. """
         try:
             cmd = "cd '%s'; git rev-parse --show-toplevel 2> /dev/null" % path
-            print(cmd)
             gitdir = self.run(cmd)
         except:
             gitdir = ''
@@ -333,7 +343,6 @@ class GrepintPluginInstance:
         for d in self._dirs:
             # still compatible with RVM
             cmd = "/bin/bash -l -c 'source $HOME/.rvm/scripts/rvm &> /dev/null; cd '%s' &> /dev/null; gem env gemdir'" % d
-            print(cmd)
             try:
                 gempath = self.run(cmd)
             except:
@@ -423,12 +432,23 @@ class GrepintPluginInstance:
             self._custom_folder.set_sensitive(True)
 
         self._grepint_window.show()
+        selected_text = None
         if doc and doc.get_selection_bounds():
             start, end = doc.get_selection_bounds()
-            self._glade_entry_name.set_text( doc.get_text(start, end, True) )
-        self.on_pattern_entry(None,None)
+            selected_text = doc.get_text(start, end, True)
+        if selected_text:
+            self._glade_entry_name.set_text( selected_text )
+            self.on_pattern_entry(None,None)
+        else:
+            self.restore_last()
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
+
+    def restore_last(self):
+        self._glade_entry_name.set_text( self.last_search )
+        self._liststore.clear()
+        for i in self.last_results:
+            self._liststore.append( i )
 
     def calculate_project_paths( self ):
         # build paths list
@@ -460,7 +480,6 @@ class GrepintPluginInstance:
 
         # add custom folder if given
         custom_folder = self._custom_folder.get_filename()
-        spit(custom_folder)
         if custom_folder is not None:
             self._dirs.add( custom_folder )
 
