@@ -7,4 +7,4 @@ Description=Grep interface
 Authors=Rubén Caro <ruben.caro@lanuez.org>
 Copyright=Copyright © 2012-2014 Rubén Caro <ruben.caro@lanuez.org>
 Website=http://github.com/rubencaro/gedit_grepint
-Version=1.1.0
+Version=1.1.1

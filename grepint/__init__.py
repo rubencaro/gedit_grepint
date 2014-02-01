@@ -55,6 +55,9 @@ class GrepintPluginInstance:
         self.last_search = ''
         self.last_results = []
 
+        self.last_single_search = ''
+        self.last_single_results = []
+
     def deactivate( self ):
         self._remove_menu()
         self._action_group = None
@@ -225,7 +228,11 @@ class GrepintPluginInstance:
             if (not (event.keyval == Gdk.KEY_Return or event.keyval == Gdk.KEY_KP_Enter)) and not self._single_file_grep:
                 return
             # do not repeat the same search
-            if self.last_search == self._glade_entry_name.get_text():
+            entry = self._glade_entry_name.get_text()
+            last = self.last_search
+            if self._single_file_grep:
+                last = self.last_single_search
+            if last == entry:
                 self.restore_last()
                 return
             self.perform_search()
@@ -273,7 +280,7 @@ class GrepintPluginInstance:
 
     def do_search( self, cmd ):
         self._liststore.clear()
-        self.last_results.clear()
+        new_results = []
         maxcount = 0
         self._label_info.set_text(cmd)
         hits = self.run(cmd)
@@ -289,7 +296,7 @@ class GrepintPluginInstance:
             else:
                 item = [name + ":" + line + ": " + text, path + ":" + line]
             self._liststore.append(item)
-            self.last_results.append(item)
+            new_results.append(item)
 
             if maxcount > self.config['max_results']:
                 break
@@ -308,7 +315,12 @@ class GrepintPluginInstance:
             if iter != None:
                 self._hit_list.get_selection().select_iter(iter)
 
-        self.last_search = self._glade_entry_name.get_text()
+        if self._single_file_grep:
+            self.last_single_search = self._glade_entry_name.get_text()
+            self.last_single_results = new_results
+        else:
+            self.last_search = self._glade_entry_name.get_text()
+            self.last_results = new_results
 
         return False
 
@@ -445,9 +457,14 @@ class GrepintPluginInstance:
         self._glade_entry_name.grab_focus()
 
     def restore_last(self):
-        self._glade_entry_name.set_text( self.last_search )
+        last_s = self.last_search
+        last_r = self.last_results
+        if self._single_file_grep:
+            last_s = self.last_single_search
+            last_r = self.last_single_results
+        self._glade_entry_name.set_text( last_s )
         self._liststore.clear()
-        for i in self.last_results:
+        for i in last_r:
             self._liststore.append( i )
 
     def calculate_project_paths( self ):
