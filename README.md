@@ -12,8 +12,8 @@ or navigate through the hits list with up/down keys.
 Go there pressing enter on selected result.
 No mouse needed.
 
-Overrides __\<Ctrl\>G__ and __\<Ctrl\>\<Shift\>G__ 
-accelerators with __Grep file__ and __Grep project__. 
+Overrides __\<Ctrl\>G__, __\<Ctrl\>\<Shift\>G__ and __\<Ctrl\>T__
+accelerators with __Grep file__, __Grep project__ and __Ctags project__.
 
 __Grep file__ performs a quick grep on current file. 
 Changes reflect live on the hits list below.
@@ -45,6 +45,13 @@ Configurable options are in a `config.json` placed in the plugin folder. You can
 using the menu entry _Edit Configuration_. Then that file is openend inside gedit, 
 and you can apply any changes
 just by saving the file, or using the _Reload Coniguration_ menu entry.
+
+__Ctags project__ performs tag searching using a tag file.
+First you should make a tag file at the top of project:
+```
+ctags -n -R
+```
+Open any file at the top project and press __\<Ctrl\>T__. That's it.
 
 Roughly based on, and perfect match with: 
  - https://github.com/rubencaro/gedit-snapopen-plugin
