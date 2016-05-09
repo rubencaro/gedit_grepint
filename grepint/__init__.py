@@ -3,6 +3,8 @@
 #
 #  Copyright (C) 2012-2013 Rubén Caro
 #
+#  For Ctags Expansion, Sim Young-Bo
+#
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation, either version 3 of the License, or
@@ -32,6 +34,64 @@ def spit(obj):
 def send_message(window, object_path, method, **kwargs):
     return window.get_message_bus().send_sync(object_path, method, **kwargs)
 
+# Ctags Parser
+# Original Author: MicahCarrick(https://github.com/Quixotix/gedit-source-code-browser)
+# Edited: Sim Young-Bo
+class Tag(object):
+    """
+    Represents a ctags "tag" found in some source code. 
+    """
+    def __init__(self, name, file=None, ex_command=None):
+        self.name = name
+        self.file = file
+        self.ex_command = ex_command
+
+    def __str__(self):
+        return self.name
+
+class Parser(object):
+    """
+    Ctags Parser
+    """
+    def __init__(self):
+        self.tags = []
+
+    def _parse_line(self, line):
+        EX_SEPERATOR=';"'
+        FIELD_SEPERATOR='\t'
+        ctags = None
+        exuberants = None
+
+        ctags, exuberants = line.split(EX_SEPERATOR)
+        split = ctags.split(FIELD_SEPERATOR)
+        name = split[0]
+        file = split[1]
+        ex_command = ''.join(split[2:])
+
+        return name, file, ex_command, exuberants
+
+    def _parse_content(self, text):
+        for line in text.splitlines():
+            if line[0] == '!':
+                continue
+
+            name, file, ex_command, exuberants = self._parse_line(line)
+            tag = Tag(name, file, ex_command)
+            self.tags.append(tag)  
+
+class SimpleParser(Parser):
+    def __init__(self, root, filename):
+        Parser.__init__(self)
+        self.root = root
+
+        filepath = root + '/' + filename
+        self._parse(filepath)
+
+    def _parse(self, path):
+        with open(path, "r") as f:
+            text = f.read()
+            self._parse_content(text)
+
 # essential interface
 class GrepintPluginInstance:
     def __init__( self, plugin, window ):
@@ -57,6 +117,9 @@ class GrepintPluginInstance:
 
         self.last_single_search = ''
         self.last_single_results = []
+
+        self.parser = None
+
 
     def deactivate( self ):
         self._remove_menu()
@@ -90,6 +153,8 @@ class GrepintPluginInstance:
                   '<Ctrl>G', "Grep on file", self.on_grepint_file_action),
                 ("GrepintProjectAction", Gtk.STOCK_FIND, "Grep on project...",
                   '<Ctrl><Shift>G', "Grep on project", self.on_grepint_project_action),
+                ("GrepintCtagsAction", Gtk.STOCK_FIND, "Ctags on file...",
+                  '<Ctrl>T', "Ctags on file", self.on_grepint_ctags_action),
                 ("GrepintConfigure", None, "Edit configuration file",
                   None, None, self.click_grepint_configure),
                 ("GrepintReload", None, "Reload configuration file",
@@ -107,6 +172,7 @@ class GrepintPluginInstance:
                     <placeholder name="GrepintMenuHolder">
                       <menuitem name="GrepintF" action="GrepintFileAction"/>
                       <menuitem name="GrepintP" action="GrepintProjectAction"/>
+                      <menuitem name="GrepintC" action="GrepintCtagsAction"/>
                       <menuitem name="GrepintConfigure" action="GrepintConfigure"/>
                       <menuitem name="GrepintReload" action="GrepintReload"/>
                     </placeholder>
@@ -173,6 +239,40 @@ class GrepintPluginInstance:
         self._use_line = self._builder.get_object("check_line").get_active
         self._use_inverse = self._builder.get_object("check_inverse").get_active
 
+    # UI DIALOGUES
+    def _init_ui_ctags( self ):
+        filename = os.path.dirname( __file__ ) + "/dialog_ctags.ui"
+        self._builder = Gtk.Builder()
+        self._builder.add_from_file(filename)
+
+        #setup window
+        self._grepint_window = self._builder.get_object('GrepintWindow')
+        self._grepint_window.connect("key-release-event", self.on_window_key)
+        self._grepint_window.set_transient_for(self._window)
+
+        #setup buttons
+        self._builder.get_object( "search_button" ).connect( "clicked", lambda a: self.perform_search_ctags() )
+        self._builder.get_object( "open_button" ).connect( "clicked", self.open_selected_item )
+
+        #setup entry field
+        self._glade_entry_name = self._builder.get_object( "regex_entry" )
+        self._glade_entry_name.connect("key-release-event", self.on_pattern_entry)
+
+        #setup list field
+        self._hit_list = self._builder.get_object( "hit_list" )
+        self._hit_list.connect("select-cursor-row", self.on_select_from_list)
+        self._hit_list.connect("button_press_event", self.on_list_mouse)
+        self._liststore = Gtk.ListStore(str, str)
+
+        self._hit_list.set_model(self._liststore)
+        self._column1 = Gtk.TreeViewColumn("Name" , Gtk.CellRendererText(), text=0)
+        self._column1.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        self._column2 = Gtk.TreeViewColumn("File", Gtk.CellRendererText(), text=1)
+        self._column2.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        self._hit_list.append_column(self._column1)
+        self._hit_list.append_column(self._column2)
+        self._hit_list.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
+
     #mouse event on list
     def on_list_mouse( self, widget, event ):
         if event.type == Gdk.EventType._2BUTTON_PRESS:
@@ -238,7 +338,7 @@ class GrepintPluginInstance:
             self.perform_search()
 
     # get text from entry and launch search
-    def perform_search( self ):
+    def perform_search_common_pre( self ):
         # add every other path if on project mode
         if not self._single_file_grep:
             self.calculate_project_paths()
@@ -276,7 +376,15 @@ class GrepintPluginInstance:
                 self._grepint_window.set_title("Enter pattern (3 chars min)... ")
                 return
         self.show_searching()
+        return cmd
+
+    def perform_search( self ):
+        cmd = self.perform_search_common_pre()
         GLib.idle_add(self.do_search,cmd)
+
+    def perform_search_ctags( self ):
+        self.perform_search_common_pre()
+        GLib.idle_add(self.do_search_ctags,None)
 
     def do_search( self, cmd ):
         self._liststore.clear()
@@ -301,6 +409,55 @@ class GrepintPluginInstance:
             if maxcount > self.config['max_results']:
                 break
             maxcount = maxcount + 1
+        if maxcount > self.config['max_results']:
+            new_title = "> %d hits" % self.config['max_results']
+        else:
+            new_title = "%d hits" % maxcount
+        self._grepint_window.set_title(new_title)
+
+        selected = []
+        self._hit_list.get_selection().selected_foreach(self.foreach, selected)
+
+        if len(selected) == 0:
+            iter = self._liststore.get_iter_first()
+            if iter != None:
+                self._hit_list.get_selection().select_iter(iter)
+
+        if self._single_file_grep:
+            self.last_single_search = self._glade_entry_name.get_text()
+            self.last_single_results = new_results
+        else:
+            self.last_search = self._glade_entry_name.get_text()
+            self.last_results = new_results
+
+        return False
+
+    def do_search_ctags( self, cmd ):
+        # It should be placed in __init__().
+        # But get_active_document() does't work.
+        # May be... plugin is initiated first
+        # before document is opened.
+        if self.parser is None:
+            doc = self._window.get_active_document()
+            loc = doc.get_location()
+            root = loc.get_parent().get_uri().replace("file://","").replace("//","/")
+            self.parser = SimpleParser(root, 'tags')
+
+        self._liststore.clear()
+        new_results = []
+        maxcount = 0
+        pattern = self._glade_entry_name.get_text()
+
+        for tag in self.parser.tags:
+            if pattern == tag.name:
+                item = [tag.name, self.parser.root + '/' + tag.file + ":" + tag.ex_command]
+                self._liststore.append(item)
+                new_results.append(item)
+
+                if maxcount > self.config['max_results']:
+                    break
+                maxcount = maxcount + 1
+
         if maxcount > self.config['max_results']:
             new_title = "> %d hits" % self.config['max_results']
         else:
@@ -414,9 +571,11 @@ class GrepintPluginInstance:
         self._single_file_grep = False
         self.show_popup()
 
-    def show_popup( self ):
-        self._init_ui()
+    def on_grepint_ctags_action( self, *args ):
+        self._single_file_grep = False
+        self.show_popup_ctags()
 
+    def show_popup_common_post(self):
         doc = self._window.get_active_document()
         if doc:
           location = doc.get_location()
@@ -455,6 +614,14 @@ class GrepintPluginInstance:
             self.restore_last()
         self._glade_entry_name.select_region(0,-1)
         self._glade_entry_name.grab_focus()
+
+    def show_popup( self ):
+        self._init_ui()
+        self.show_popup_common_post()
+
+    def show_popup_ctags( self ):
+        self._init_ui_ctags()
+        self.show_popup_common_post()
 
     def restore_last(self):
         last_s = self.last_search
